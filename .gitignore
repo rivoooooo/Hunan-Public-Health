@@ -25,3 +25,7 @@ dist-ssr
 .ignore
 # AI agent worktrees
 .claude/worktrees/
+
+.agents/skills
+.agents/temp
+.trae

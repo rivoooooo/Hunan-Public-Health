@@ -10,6 +10,7 @@ export type RequestCookie = {
   name: string;
   value: string;
   raw: string;
+  hop: number;
 };
 
 export type RequestInfo = {
@@ -36,7 +37,7 @@ const DEFAULT_HEADERS: Record<string, string> = {
 
 export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<RequestInfo> {
   const headers = options.headers ?? DEFAULT_HEADERS;
-  const startUrl = options.startUrl ?? "https://ggws.hnhfpc.gov.cn/Index.aspx";
+  const startUrl = options.startUrl ?? "https://ggws.hnhfpc.gov.cn";
   const maxHops = options.maxHops ?? 10;
 
   const readSetCookie = (res: Response): string[] => {
@@ -67,7 +68,7 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
 
   const visitedUrls: string[] = [];
   const hops: RequestHop[] = [];
-  const allSetCookies: string[] = [];
+  const allSetCookies: Array<{ setCookie: string; hop: number }> = [];
 
   let currentUrl = startUrl;
 
@@ -79,7 +80,8 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
     });
 
     visitedUrls.push(currentUrl);
-    allSetCookies.push(...readSetCookie(res));
+    const setCookies = readSetCookie(res);
+    allSetCookies.push(...setCookies.map((setCookie) => ({ setCookie, hop })));
 
     const location = await extractLocation(res);
     const nextUrl = location ? new URL(location, currentUrl).toString() : null;
@@ -91,7 +93,52 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
       nextUrl,
     });
 
-    if (!location) break;
+    if (location) {
+      console.log(`[redirect]: ${nextUrl}`);
+    }
+
+    // 检查是否满足停止条件
+    let shouldStop = false;
+    try {
+      const urlObj = new URL(currentUrl);
+      const pathname = urlObj.pathname;
+      const baseUrlObj = new URL(startUrl);
+      const baseHost = baseUrlObj.host;
+
+      // 检查是否是 baseurl + Index.aspx
+      if (pathname === "/Index.aspx" && urlObj.host === baseHost) {
+        // 检查是否有 Token 参数并且有值
+        const token = urlObj.searchParams.get("Token");
+        if (token && token.length > 0) {
+          // 检查是否采集到了 ASP.NET_SessionId 和 csrf_token
+          let hasSessionId = false;
+          let hasCsrfToken = false;
+
+          // 检查已采集的所有 cookies
+          for (const { setCookie } of allSetCookies) {
+            const pair = setCookie.split(";")[0]?.trim() ?? "";
+            const index = pair.indexOf("=");
+            if (index > 0) {
+              const name = pair.slice(0, index).trim();
+              if (name === "ASP.NET_SessionId") {
+                hasSessionId = true;
+              } else if (name === "csrf_token") {
+                hasCsrfToken = true;
+              }
+            }
+          }
+
+          if (hasSessionId && hasCsrfToken) {
+            shouldStop = true;
+            console.log("[stop] 满足停止条件，不再继续重定向");
+          }
+        }
+      }
+    } catch {
+      // 解析 URL 错误时继续
+    }
+
+    if (!location || shouldStop) break;
 
     currentUrl = nextUrl ?? currentUrl;
   }
@@ -108,7 +155,7 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
       })
       .find((value) => value && value.length > 0) ?? "";
 
-  const cookies = allSetCookies.reduce<RequestCookie[]>((acc, setCookie) => {
+  const cookies = allSetCookies.reduce<RequestCookie[]>((acc, { setCookie, hop }) => {
     const pair = setCookie.split(";")[0]?.trim() ?? "";
     if (!pair) return acc;
 
@@ -119,7 +166,7 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
     const value = pair.slice(index + 1).trim();
     if (!name) return acc;
 
-    acc.push({ name, value, raw: setCookie });
+    acc.push({ name, value, raw: setCookie, hop });
     return acc;
   }, []);
 
