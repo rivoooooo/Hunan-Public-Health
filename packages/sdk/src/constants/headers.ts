@@ -1,8 +1,4 @@
-export const API_BASE_URL = "https://ggws.hnhfpc.gov.cn";
-export const LOGIN_HANDLER_URL = API_BASE_URL + "/ashx/LoginHandler.ashx";
-export const INDEX_URL = API_BASE_URL + "/Index.aspx";
-export const FORM_MAIN_URL = API_BASE_URL + "/FormMain.aspx";
-export const FORM_NOTICE_URL = API_BASE_URL + "/FormNotice.aspx?LeiXing=2&PAGEINDEX=1";
+import { API_BASE_URL, INDEX_URL, FORM_MAIN_URL } from "./api";
 
 export const DEFAULT_HEADERS_BASE = {
   "User-Agent":
@@ -17,9 +13,9 @@ export const LOGIN_HEADERS_BASE = {
   Connection: "keep-alive",
   "Content-Length": "0",
   Host: "ggws.hnhfpc.gov.cn",
-  Origin: "https://ggws.hnhfpc.gov.cn",
+  Origin: API_BASE_URL,
   Pragma: "no-cache",
-  Referer: INDEX_URL,
+  Referer: API_BASE_URL + INDEX_URL,
   "Sec-Fetch-Dest": "empty",
   "Sec-Fetch-Mode": "cors",
   "Sec-Fetch-Site": "same-origin",
@@ -39,7 +35,7 @@ export const REFRESH_TOKEN_HEADERS_BASE = {
   Connection: "keep-alive",
   Host: "ggws.hnhfpc.gov.cn",
   Pragma: "no-cache",
-  Referer: FORM_MAIN_URL,
+  Referer: API_BASE_URL + FORM_MAIN_URL,
   "Sec-Fetch-Dest": "iframe",
   "Sec-Fetch-Mode": "navigate",
   "Sec-Fetch-Site": "same-origin",
@@ -48,9 +44,4 @@ export const REFRESH_TOKEN_HEADERS_BASE = {
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": '"macOS"',
   ...DEFAULT_HEADERS_BASE,
-};
-
-export const TOKEN_EN_TH = {
-  en: "FD36A19AC92249C0B1128CB3093BC2AF",
-  th: "76645BF7D798473196467F10F6685752989A52C97226438F812AD6AE90E6640C",
 };

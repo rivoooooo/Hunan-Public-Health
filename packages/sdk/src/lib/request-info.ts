@@ -1,5 +1,5 @@
 import { readSetCookie, fetchGet } from "./utils/index";
-import { API_BASE_URL, DEFAULT_HEADERS_BASE } from "./constants/index";
+import { API_BASE_URL, DEFAULT_HEADERS_BASE } from "../constants/index";
 
 type RequestInfoOptions = {
   startUrl?: string;

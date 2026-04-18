@@ -6,7 +6,7 @@ import {
   REFRESH_TOKEN_HEADERS_BASE,
   FORM_NOTICE_URL,
   TOKEN_EN_TH,
-} from "../constants/index";
+} from "../../constants/index";
 
 export type LoginParams = {
   username: string;
