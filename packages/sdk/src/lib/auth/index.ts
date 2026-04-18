@@ -1,5 +1,14 @@
 import { crptosEn, crptosTH } from "../crypto/index";
-import { readSetCookie, fetchGet, fetchPost } from "../utils/index";
+import {
+  readSetCookie,
+  fetchGet,
+  fetchPost,
+  parseSetCookies,
+  mergeCookies,
+  type Cookie,
+} from "../utils/index";
+import { getStore, hasStore } from "../store/index";
+import { STORE_KEYS } from "../../constants/index";
 import {
   LOGIN_HANDLER_URL,
   LOGIN_HEADERS_BASE,
@@ -20,7 +29,7 @@ export type LoginResult = {
   message: string;
   data?: {
     token: string;
-    cookies: Array<{ name: string; value: string; raw: string }>;
+    cookies: Cookie[];
   };
 };
 
@@ -61,15 +70,7 @@ export async function login(
     const res = await fetchPost(loginUrl, { headers: defaultHeaders });
 
     const setCookies = readSetCookie(res);
-    let cookies = setCookies.map((setCookie) => {
-      const pair = setCookie.split(";").shift()?.trim() ?? "";
-      const [name, value] = pair.split("=", 2);
-      return {
-        name: (name ?? "").trim(),
-        value: (value ?? "").trim(),
-        raw: setCookie,
-      };
-    });
+    let cookies = parseSetCookies(setCookies);
 
     const responseBody = await res.text();
 
@@ -87,7 +88,7 @@ export async function login(
               raw: `username_yljgxm=${params.username}`,
             });
 
-            return {
+            const result = {
               success: true,
               message: data.msg || "登录成功",
               data: {
@@ -95,6 +96,16 @@ export async function login(
                 cookies,
               },
             };
+
+            // 自动保存到 store
+            if (hasStore()) {
+              const store = getStore();
+              await store.set(STORE_KEYS.TOKEN, result.data.token);
+              await store.set(STORE_KEYS.COOKIES, result.data.cookies);
+              await store.set(STORE_KEYS.USERNAME, params.username);
+            }
+
+            return result;
           } else {
             // 登录失败
             return {
@@ -110,7 +121,7 @@ export async function login(
             raw: `username_yljgxm=${params.username}`,
           });
 
-          return {
+          const result = {
             success: true,
             message: data.message,
             data: {
@@ -118,6 +129,16 @@ export async function login(
               cookies,
             },
           };
+
+          // 自动保存到 store
+          if (hasStore()) {
+            const store = getStore();
+            await store.set(STORE_KEYS.TOKEN, result.data.token);
+            await store.set(STORE_KEYS.COOKIES, result.data.cookies);
+            await store.set(STORE_KEYS.USERNAME, params.username);
+          }
+
+          return result;
         } else {
           // 其他失败情况
           return {
@@ -147,10 +168,26 @@ export async function login(
 }
 
 export async function refreshToken(
-  cookies: Array<{ name: string; value: string }>,
+  cookies?: Cookie[],
   headers?: Record<string, string>,
 ): Promise<LoginResult> {
-  const cookieString = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+  let useCookies = cookies;
+
+  // 如果没有提供 cookies，从 store 读取
+  if (!useCookies && hasStore()) {
+    const store = getStore();
+    const storedCookies = await store.get(STORE_KEYS.COOKIES);
+    useCookies = storedCookies || undefined;
+  }
+
+  if (!useCookies || useCookies.length === 0) {
+    return {
+      success: false,
+      message: "没有可用的 cookies",
+    };
+  }
+
+  const cookieString = useCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 
   const defaultHeaders: Record<string, string> = {
     ...REFRESH_TOKEN_HEADERS_BASE,
@@ -165,41 +202,27 @@ export async function refreshToken(
 
     // 读取 cookies
     const setCookies = readSetCookie(res);
-
-    // 处理 cookies
-    const cookieMap = new Map<string, string>();
-    // 先添加原始 cookies
-    cookies.forEach((cookie) => {
-      cookieMap.set(cookie.name, cookie.value);
-    });
-    // 再添加新的 cookies
-    setCookies.forEach((setCookie) => {
-      const pair = setCookie.split(";").shift()?.trim() ?? "";
-      const [name, value] = pair.split("=", 2);
-      if (name && value) {
-        cookieMap.set(name, value);
-      }
-    });
-
-    const newCookies = Array.from(cookieMap.entries()).map(([name, value]) => {
-      const raw = setCookies.find((cookie) => cookie.startsWith(`${name}=`)) || `${name}=${value}`;
-      return {
-        name,
-        value,
-        raw,
-      };
-    });
+    const newCookies = parseSetCookies(setCookies);
+    const mergedCookies = mergeCookies(useCookies, newCookies);
 
     // 服务器会自动更新 cookies，只要有新的 set-cookie 就认为成功
     if (setCookies.length > 0 || res.status === 200) {
-      return {
+      const result = {
         success: true,
         message: setCookies.length > 0 ? "Cookies 刷新成功" : "访问成功，Cookies 已更新",
         data: {
           token: "",
-          cookies: newCookies,
+          cookies: mergedCookies,
         },
       };
+
+      // 自动保存到 store
+      if (hasStore()) {
+        const store = getStore();
+        await store.set(STORE_KEYS.COOKIES, result.data.cookies);
+      }
+
+      return result;
     }
 
     return {
