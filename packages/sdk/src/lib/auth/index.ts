@@ -1,13 +1,21 @@
-import { crptosEn, crptosTH } from "./crypto";
+import { crptosEn, crptosTH } from "../crypto/index";
+import { readSetCookie, fetchGet, fetchPost } from "../utils/index";
+import {
+  LOGIN_HANDLER_URL,
+  LOGIN_HEADERS_BASE,
+  REFRESH_TOKEN_HEADERS_BASE,
+  FORM_NOTICE_URL,
+  TOKEN_EN_TH,
+} from "../constants/index";
 
-type LoginParams = {
+export type LoginParams = {
   username: string;
   password: string;
   captcha?: string;
   type?: string;
 };
 
-type LoginResult = {
+export type LoginResult = {
   success: boolean;
   message: string;
   data?: {
@@ -16,24 +24,8 @@ type LoginResult = {
   };
 };
 
-const token_en_th = {
-  en: "FD36A19AC92249C0B1128CB3093BC2AF",
-  th: "76645BF7D798473196467F10F6685752989A52C97226438F812AD6AE90E6640C",
-};
-
 function getPassrod({ pwd, time }: { pwd: string; time: string }) {
-  return crptosEn([pwd, time].join("|"), token_en_th.en);
-}
-
-function readSetCookie(res: Response): string[] {
-  const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
-  if (typeof getSetCookie === "function") return getSetCookie.call(res.headers);
-  return (
-    res.headers
-      .get("set-cookie")
-      ?.split(/,(?=\s*[^;,,\s]+=)/)
-      .map((item: string) => item.trim()) ?? []
-  );
+  return crptosEn([pwd, time].join("|"), TOKEN_EN_TH.en);
 }
 
 function getLoginUrl({ username, password, captcha, type }: LoginParams) {
@@ -42,8 +34,8 @@ function getLoginUrl({ username, password, captcha, type }: LoginParams) {
     pwd: password,
     time,
   });
-  const sign = crptosTH(`${pwd}${token_en_th.th}`);
-  const _URL_ = new URL("https://ggws.hnhfpc.gov.cn/ashx/LoginHandler.ashx");
+  const sign = crptosTH(`${pwd}${TOKEN_EN_TH.th}`);
+  const _URL_ = new URL(LOGIN_HANDLER_URL);
   _URL_.searchParams.set("action", "LOGIN");
   _URL_.searchParams.set("YONGHUMING", username);
   _URL_.searchParams.set("MIMA", pwd);
@@ -61,34 +53,12 @@ export async function login(
   const loginUrl = getLoginUrl(params);
 
   const defaultHeaders: Record<string, string> = {
-    Accept: "application/json, text/javascript, */*; q=0.01",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "Content-Length": "0",
-    Host: "ggws.hnhfpc.gov.cn",
-    Origin: "https://ggws.hnhfpc.gov.cn",
-    Pragma: "no-cache",
-    Referer: "https://ggws.hnhfpc.gov.cn/Index.aspx",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin",
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    "X-Requested-With": "XMLHttpRequest",
-    "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"macOS"',
+    ...LOGIN_HEADERS_BASE,
     ...headers,
   };
 
   try {
-    const res = await fetch(loginUrl, {
-      method: "POST",
-      headers: defaultHeaders,
-      redirect: "manual",
-    });
+    const res = await fetchPost(loginUrl, { headers: defaultHeaders });
 
     const setCookies = readSetCookie(res);
     let cookies = setCookies.map((setCookie) => {
@@ -183,36 +153,15 @@ export async function refreshToken(
   const cookieString = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 
   const defaultHeaders: Record<string, string> = {
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
+    ...REFRESH_TOKEN_HEADERS_BASE,
     Cookie: cookieString,
-    Host: "ggws.hnhfpc.gov.cn",
-    Pragma: "no-cache",
-    Referer: "https://ggws.hnhfpc.gov.cn/FormMain.aspx",
-    "Sec-Fetch-Dest": "iframe",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Upgrade-Insecure-Requests": "1",
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"macOS"',
     ...headers,
   };
 
   try {
     // 访问通知页面，触发 cookie 自动刷新
-    const refreshUrl = "https://ggws.hnhfpc.gov.cn/FormNotice.aspx?LeiXing=2&PAGEINDEX=1";
-    const res = await fetch(refreshUrl, {
-      method: "GET",
-      headers: defaultHeaders,
-      redirect: "manual",
-    });
+    const refreshUrl = FORM_NOTICE_URL;
+    const res = await fetchGet(refreshUrl, { headers: defaultHeaders });
 
     // 读取 cookies
     const setCookies = readSetCookie(res);
