@@ -5,16 +5,21 @@ import {
   fetchPost,
   parseSetCookies,
   mergeCookies,
+  cookiesToString,
   type Cookie,
 } from "../utils/index";
 import { getStore, hasStore } from "../store/index";
 import { STORE_KEYS } from "../../constants/index";
+import { getRequestInfo } from "../request-info";
 import {
   LOGIN_HANDLER_URL,
   LOGIN_HEADERS_BASE,
   REFRESH_TOKEN_HEADERS_BASE,
+  LOGIN_PAGE_HEADERS_BASE,
   FORM_NOTICE_URL,
   TOKEN_EN_TH,
+  API_BASE_URL,
+  INDEX_URL,
 } from "../../constants/index";
 
 export type LoginParams = {
@@ -33,18 +38,18 @@ export type LoginResult = {
   };
 };
 
-function getPassrod({ pwd, time }: { pwd: string; time: string }) {
+export function getPassrod({ pwd, time }: { pwd: string; time: string }) {
   return crptosEn([pwd, time].join("|"), TOKEN_EN_TH.en);
 }
 
-function getLoginUrl({ username, password, captcha, type }: LoginParams) {
+export function getLoginUrl({ username, password, captcha, type }: LoginParams) {
   const time = new Date().getTime().toString();
   const pwd = getPassrod({
     pwd: password,
     time,
   });
   const sign = crptosTH(`${pwd}${TOKEN_EN_TH.th}`);
-  const _URL_ = new URL(LOGIN_HANDLER_URL);
+  const _URL_ = new URL(LOGIN_HANDLER_URL, API_BASE_URL);
   _URL_.searchParams.set("action", "LOGIN");
   _URL_.searchParams.set("YONGHUMING", username);
   _URL_.searchParams.set("MIMA", pwd);
@@ -69,7 +74,8 @@ export async function login(
   try {
     const res = await fetchPost(loginUrl, { headers: defaultHeaders });
 
-    const setCookies = readSetCookie(res);
+    // 直接从原始 res 读取 cookies
+    const setCookies = readSetCookie(res as unknown as Response);
     let cookies = parseSetCookies(setCookies);
 
     const responseBody = await res.text();
@@ -235,4 +241,67 @@ export async function refreshToken(
       message: `Token 刷新异常：${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+export type PrepareLoginResult = {
+  token: string;
+  cookies: Cookie[];
+  referer: string;
+};
+
+export async function prepareLogin(): Promise<PrepareLoginResult> {
+  // 1. 获取初始信息
+  const requestInfo = await getRequestInfo();
+
+  // 2. 将初始 cookies 转换为 Cookie[] 格式
+  const initialCookies: Cookie[] = requestInfo.cookies.map((cookieObj) => {
+    const [name, value] = Object.entries(cookieObj)[0]!;
+    return {
+      name,
+      value,
+      raw: `${name}=${value}`,
+    };
+  });
+
+  // 3. 构建 referer
+  const referer = `${API_BASE_URL}${INDEX_URL}?Token=${requestInfo.token}`;
+
+  // 4. 构建 headers
+  const headers: Record<string, string> = {
+    ...LOGIN_PAGE_HEADERS_BASE,
+    Referer: referer,
+    Cookie: cookiesToString(initialCookies),
+  };
+
+  // 5. 访问登录页面获取最新 cookies
+  const loginPageRes = await fetchGet(referer, { headers });
+
+  // 6. 处理新 cookies
+  const setCookies = readSetCookie(loginPageRes);
+  const newCookies = parseSetCookies(setCookies);
+  const mergedCookies = mergeCookies(initialCookies, newCookies);
+
+  // 7. 返回完整准备数据
+  return {
+    token: requestInfo.token,
+    cookies: mergedCookies,
+    referer,
+  };
+}
+
+export async function completeLogin(params: LoginParams): Promise<LoginResult> {
+  // 1. 准备登录
+  const { token: _token, cookies, referer } = await prepareLogin();
+
+  // 2. 构建 headers
+  const headers: Record<string, string> = {
+    Referer: referer,
+    Cookie: cookiesToString(cookies),
+  };
+
+  // 3. 调用 login 函数登录
+  const loginResult = await login(params, headers);
+
+  // 4. 返回登录结果（login 函数已经自动保存到 store）
+  return loginResult;
 }

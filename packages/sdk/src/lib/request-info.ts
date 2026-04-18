@@ -1,4 +1,4 @@
-import { readSetCookie, fetchGet } from "./utils/index";
+import { readSetCookie } from "./utils/index";
 import { API_BASE_URL, DEFAULT_HEADERS_BASE } from "../constants/index";
 
 type RequestInfoOptions = {
@@ -30,15 +30,22 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
     const headerLocation = res.headers.get("location");
     if (headerLocation) return headerLocation;
 
-    const body = await res.text();
-    const scriptLocationMatch =
-      body.match(/window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i) ??
-      body.match(/top\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i);
-    const metaRefreshMatch = body.match(
-      /<meta[^>]+http-equiv=["']refresh["'][^>]*content=["'][^"']*url=([^"'>\s]+)[^"']*["']/i,
-    );
+    try {
+      // 克隆 response 以避免 body 被多次读取
+      const clonedRes = res.clone();
+      const body = await clonedRes.text();
+      const scriptLocationMatch =
+        body.match(/window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i) ??
+        body.match(/top\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i);
+      const metaRefreshMatch = body.match(
+        /<meta[^>]+http-equiv=["']refresh["'][^>]*content=["'][^"']*url=([^"'>\s]+)[^"']*["']/i,
+      );
 
-    return scriptLocationMatch?.[1] ?? metaRefreshMatch?.[1] ?? null;
+      return scriptLocationMatch?.[1] ?? metaRefreshMatch?.[1] ?? null;
+    } catch (error) {
+      console.warn("读取响应体失败:", error);
+      return null;
+    }
   };
 
   const rawData: { url: string; cookies: string[] }[] = [];
@@ -47,8 +54,19 @@ export async function getRequestInfo(options: RequestInfoOptions = {}): Promise<
 
   let currentUrl = startUrl;
 
+  // 原始 fetch 函数，避免 ofetch 拦截器影响
+  const rawFetch = async (url: string, options: any) => {
+    const response = await fetch(url, options);
+    // 克隆响应以允许多次读取
+    return response;
+  };
+
   for (let hop = 0; hop < maxHops; hop++) {
-    const res = await fetchGet(currentUrl, { headers });
+    const res = await rawFetch(currentUrl, { 
+      method: 'GET',
+      headers,
+      redirect: 'manual' 
+    });
 
     const setCookies = readSetCookie(res);
     rawData.push({ url: currentUrl, cookies: setCookies });

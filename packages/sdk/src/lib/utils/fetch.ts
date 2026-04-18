@@ -1,13 +1,7 @@
-import { ofetch, type FetchOptions } from "ofetch";
+import { ofetch } from "ofetch";
 import { API_BASE_URL, DEFAULT_HEADERS_BASE, STORE_KEYS } from "../../constants/index";
 import { getStore, hasStore } from "../store/index";
-import {
-  readSetCookie,
-  parseSetCookies,
-  mergeCookies,
-  cookiesToString,
-  type Cookie,
-} from "./cookie";
+import { cookiesToString, type Cookie } from "./cookie";
 
 let $ofetch = ofetch.create({
   baseURL: API_BASE_URL,
@@ -31,19 +25,6 @@ function createEnhancedFetch() {
         options.headers = headers;
       }
     },
-    async onResponse({ response }) {
-      if (!hasStore()) return;
-
-      const store = getStore();
-      const setCookieStrings = readSetCookie(response as unknown as Response);
-
-      if (setCookieStrings.length > 0) {
-        const newCookies = parseSetCookies(setCookieStrings);
-        const existingCookies: Cookie[] = (await store.get(STORE_KEYS.COOKIES)) || [];
-        const mergedCookies = mergeCookies(existingCookies, newCookies);
-        await store.set(STORE_KEYS.COOKIES, mergedCookies);
-      }
-    },
   });
 }
 
@@ -51,16 +32,37 @@ export function initFetch() {
   $ofetch = createEnhancedFetch();
 }
 
+// 使用标准 fetch API 来避免 ofetch 的问题
 export async function fetchGet(
   url: string,
   options: { headers?: Record<string, string>; redirect?: RequestInit["redirect"] } = {},
 ): Promise<Response> {
   const { headers = {}, redirect = "manual" } = options;
-  return $ofetch.raw(url, {
+  
+  // 构建完整 URL
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  
+  // 构建请求配置
+  const config: RequestInit = {
     method: "GET",
-    headers,
+    headers: {
+      ...DEFAULT_HEADERS_BASE,
+      ...headers,
+    },
     redirect,
-  });
+  };
+  
+  // 添加 cookies（如果有）
+  if (hasStore()) {
+    const store = getStore();
+    const cookies: Cookie[] = (await store.get(STORE_KEYS.COOKIES)) || [];
+    if (cookies.length > 0) {
+      const cookieString = cookiesToString(cookies);
+      (config.headers as Record<string, string>).Cookie = cookieString;
+    }
+  }
+  
+  return fetch(fullUrl, config);
 }
 
 export async function fetchPost(
@@ -68,11 +70,31 @@ export async function fetchPost(
   options: { headers?: Record<string, string>; redirect?: RequestInit["redirect"] } = {},
 ): Promise<Response> {
   const { headers = {}, redirect = "manual" } = options;
-  return $ofetch.raw(url, {
+  
+  // 构建完整 URL
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  
+  // 构建请求配置
+  const config: RequestInit = {
     method: "POST",
-    headers,
+    headers: {
+      ...DEFAULT_HEADERS_BASE,
+      ...headers,
+    },
     redirect,
-  });
+  };
+  
+  // 添加 cookies（如果有）
+  if (hasStore()) {
+    const store = getStore();
+    const cookies: Cookie[] = (await store.get(STORE_KEYS.COOKIES)) || [];
+    if (cookies.length > 0) {
+      const cookieString = cookiesToString(cookies);
+      (config.headers as Record<string, string>).Cookie = cookieString;
+    }
+  }
+  
+  return fetch(fullUrl, config);
 }
 
 export { $ofetch };

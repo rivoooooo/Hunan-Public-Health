@@ -45,3 +45,22 @@ export const REFRESH_TOKEN_HEADERS_BASE = {
   "sec-ch-ua-platform": '"macOS"',
   ...DEFAULT_HEADERS_BASE,
 };
+
+export const LOGIN_PAGE_HEADERS_BASE = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  "Accept-Encoding": "gzip, deflate, br, zstd",
+  "Accept-Language": "zh-CN,zh;q=0.9",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
+  Host: "ggws.hnhfpc.gov.cn",
+  Pragma: "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "same-origin",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+  "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+  ...DEFAULT_HEADERS_BASE,
+};
