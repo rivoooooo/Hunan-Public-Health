@@ -28,7 +28,16 @@
 - 类型：SDK 包
 - 职责：提供通用工具和功能
 - 技术栈：TypeScript
-- 主要功能：加密工具、字节处理、网络请求
+- 主要功能：
+  - 通用存储接口（支持浏览器 localStorage 和 Node.js 内存存储）
+  - 一站式认证流程（prepareLogin、completeLogin）
+  - 自动 Cookie 管理
+  - 加密工具、字节处理、网络请求
+- 新增特性：
+  - initSDK：SDK 初始化函数
+  - Store：通用存储接口
+  - prepareLogin：登录前准备
+  - completeLogin：一站式登录
 
 ## 包定位关键词参考（推断规则，非强制）
 
